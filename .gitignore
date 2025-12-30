@@ -1,0 +1,15 @@
+# Ignore Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore virtual environment
+demo/
+venv/
+.env
+# Ignore videos and documents
+*.mp4
+*.pdf
+Data/*.npz
