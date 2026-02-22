@@ -143,7 +143,7 @@ feature_names = np.array(tfidf.get_feature_names_out())
 # ======================================================
 st.markdown("""
 <div class="hero">
-    <h1>🚀 Ardintix Project round-2</h1>
+    <h1>🚀  Ardintix Project Round-2</h1>
     <h3>Skill-to-Role Mapping with Actionable Career Tips using Machine Learning</h3>
 </div>
 """, unsafe_allow_html=True)
