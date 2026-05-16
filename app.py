@@ -3,6 +3,8 @@ import joblib
 import numpy as np
 import time
 import re
+import os
+import requests
 
 # ======================================================
 # PAGE CONFIG
@@ -13,18 +15,22 @@ st.set_page_config(
 )
 
 # ======================================================
-# CSS – CLEAN WHITE PREMIUM UI
+# API KEYS
+# ======================================================
+APP_ID = st.secrets["APP_ID"]
+APP_KEY = st.secrets["APP_KEY"]
+
+# ======================================================
+# CSS
 # ======================================================
 st.markdown("""
 <style>
 
-/* Page background */
 html, body, [class*="stApp"] {
     background-color: #ffffff;
     color: #111827;
 }
 
-/* Hero */
 .hero {
     background: linear-gradient(135deg, #4F46E5, #6366F1);
     padding: 48px;
@@ -35,7 +41,6 @@ html, body, [class*="stApp"] {
     color: white;
 }
 
-/* Input card */
 .input-card {
     background: #ffffff;
     padding: 30px;
@@ -45,42 +50,22 @@ html, body, [class*="stApp"] {
     margin-bottom: 25px;
 }
 
-/* Textarea */
 textarea {
     font-size: 20px !important;
     padding: 14px !important;
     border-radius: 14px !important;
     border: 2px solid #6366F1 !important;
 }
-textarea:focus {
-    box-shadow: 0 0 12px rgba(99,102,241,0.5) !important;
-}
 
-/* Predict button */
 .stButton > button {
-    font-size: 20px;
-    padding: 14px 40px;
+    font-size: 18px;
+    padding: 12px 30px;
     border-radius: 14px;
     background: linear-gradient(135deg, #4F46E5, #6366F1);
     color: white;
     border: none;
-    transition: all 0.25s ease;
-}
-.stButton > button:hover {
-    transform: scale(1.06);
-    box-shadow: 0 10px 25px rgba(79,70,229,0.5);
 }
 
-/* Results section */
-.results-box {
-    background: #F9FAFB;
-    padding: 30px;
-    border-radius: 20px;
-    margin-top: 20px;
-    animation: fadeUp 0.6s ease forwards;
-}
-
-/* Role card */
 .role-card {
     background: white;
     padding: 22px;
@@ -90,32 +75,19 @@ textarea:focus {
     box-shadow: 0 6px 18px rgba(0,0,0,0.08);
 }
 
-/* Progress bar */
-.progress {
-    height: 10px;
-    border-radius: 6px;
-    background: linear-gradient(90deg, #4F46E5, #22C55E);
-}
-
-/* Tip box */
 .tip-box {
     background: #ECFDF5;
-    padding: 26px;
+    padding: 24px;
     border-radius: 18px;
     border-left: 6px solid #10B981;
-    box-shadow: 0 6px 18px rgba(16,185,129,0.25);
 }
 
-/* Animation */
-@keyframes fadeUp {
-    from { opacity: 0; transform: translateY(25px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.section-title {
-    font-size: 28px;
-    font-weight: 700;
-    margin-bottom: 20px;
+.job-card {
+    background: #F9FAFB;
+    padding: 20px;
+    border-radius: 18px;
+    margin-bottom: 18px;
+    border: 1px solid #E5E7EB;
 }
 
 </style>
@@ -124,13 +96,19 @@ textarea:focus {
 # ======================================================
 # LOAD MODEL
 # ======================================================
-import os
-import joblib
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-MODEL_PATH = os.path.join(BASE_DIR, "models", "final_logistic_model.joblib")
-TFIDF_PATH = os.path.join(BASE_DIR, "models", "tfidf_vectorizer.joblib")
+MODEL_PATH = os.path.join(
+    BASE_DIR,
+    "models",
+    "final_logistic_model.joblib"
+)
+
+TFIDF_PATH = os.path.join(
+    BASE_DIR,
+    "models",
+    "tfidf_vectorizer.joblib"
+)
 
 model = joblib.load(MODEL_PATH)
 tfidf = joblib.load(TFIDF_PATH)
@@ -139,106 +117,308 @@ roles = model.classes_
 feature_names = np.array(tfidf.get_feature_names_out())
 
 # ======================================================
+# API FUNCTION
+# ======================================================
+def fetch_jobs(role_query):
+
+    url = (
+        f"https://api.adzuna.com/v1/api/jobs/in/search/1"
+        f"?app_id={APP_ID}"
+        f"&app_key={APP_KEY}"
+        f"&what={role_query.replace(' ', '+')}"
+    )
+
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        return response.json().get("results", [])
+
+    return []
+
+# ======================================================
 # HERO
 # ======================================================
 st.markdown("""
 <div class="hero">
-    <h1>🚀  Ardintix Project Round-2</h1>
-    <h3>Skill-to-Role Mapping with Actionable Career Tips using Machine Learning</h3>
+    <h1>🚀 Skill2Role AI</h1>
+    <h3>Skill-to-Role Mapping with Live Career Opportunities</h3>
 </div>
 """, unsafe_allow_html=True)
 
 # ======================================================
-# INPUT
+# INPUT SECTION
 # ======================================================
 st.markdown("<div class='input-card'>", unsafe_allow_html=True)
-st.markdown("### 🧠 Enter Your Skills / Experience")
+
+# ------------------------------------------------------
+# JOB TYPE FILTER
+# ------------------------------------------------------
+job_type = st.selectbox(
+    "🎯 Select Opportunity Type",
+    [
+        "Full-time",
+        "Internship"
+    ]
+)
+
+st.markdown("### 🧠 Enter Your Skills")
 
 user_input = st.text_area(
-    "Skills Input",
-    placeholder="Python, SQL, Machine Learning, UI/UX, Power BI, Git",
-    height=150,
+    "Skills",
+    placeholder="""
+Examples:
+Python, SQL, Power BI, Data Analysis
+Machine Learning, TensorFlow, Scikit-learn
+AWS, Docker, Kubernetes
+""",
+    height=180,
     label_visibility="collapsed"
 )
 
-predict = st.button("✨ Predict Job Roles")
+predict = st.button("✨ Predict Roles")
+
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ======================================================
-# INPUT VALIDATION
+# VALIDATION
 # ======================================================
-valid_pattern = re.compile(r"^[A-Za-z.,\s]+$")
+valid_pattern = re.compile(r"^[A-Za-z0-9.,+\-\s]+$")
 
 if predict:
 
+    # --------------------------------------------------
+    # EMPTY INPUT
+    # --------------------------------------------------
     if user_input.strip() == "":
-        st.warning("⚠️ Please enter at least one skill.")
+        st.warning("Please enter at least one skill.")
 
+    # --------------------------------------------------
+    # INVALID INPUT
+    # --------------------------------------------------
     elif not valid_pattern.match(user_input):
-        st.error(
-            "❌ Invalid input.\n\n"
-            "Only **letters**, **comma (,)** and **dot (.)** are allowed.\n\n"
-            "Example: `Python, Machine Learning, SQL.`"
-        )
+        st.error("Invalid input format.")
 
     else:
-        # ======================================================
-        # PREDICTION
-        # ======================================================
-        with st.spinner("🔍 Analyzing skills and predicting roles..."):
+
+        with st.spinner("Analyzing skills..."):
             time.sleep(1)
 
+            # ------------------------------------------
+            # VECTORIZE
+            # ------------------------------------------
             X = tfidf.transform([user_input])
+
+            # ------------------------------------------
+            # PREDICT
+            # ------------------------------------------
             probs = model.predict_proba(X)[0]
+
             top_idx = np.argsort(probs)[::-1][:5]
 
-        st.success("✅ Prediction completed successfully!")
+            max_conf = probs[top_idx[0]]
 
-        st.markdown("<div class='results-box'>", unsafe_allow_html=True)
-        left, right = st.columns([2.3, 1])
+        # ======================================================
+        # LOW CONFIDENCE
+        # ======================================================
+        if max_conf < 0.08:
 
-        # LEFT RESULTS
-        with left:
-            st.markdown("<div class='section-title'>🔍 Top Job Role Recommendations</div>", unsafe_allow_html=True)
+            st.error("""
+Your profile currently shows a very basic skill match.
 
-            for i, idx in enumerate(top_idx, 1):
+Please improve foundational skills like:
+Python, SQL, Excel, Data Analysis, Communication.
+""")
+
+        # ======================================================
+        # GOOD PROFILE
+        # ======================================================
+        else:
+
+            left, right = st.columns([2, 1])
+
+            # ==================================================
+            # LEFT SIDE
+            # ==================================================
+            with left:
+
+                st.subheader("🎯 Top Role Recommendations")
+
+                rank = 1
+
+                for idx in top_idx:
+
+                    conf = int(probs[idx] * 100)
+
+                    # Skip weak predictions
+                    if conf < 2:
+                        continue
+
+                    st.markdown(f"""
+                    <div class="role-card">
+                        <h4>{rank}. {roles[idx]}</h4>
+                        <p>Confidence Score: <b>{conf}%</b></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    rank += 1
+
+            # ==================================================
+            # RIGHT SIDE
+            # ==================================================
+            with right:
+
+                st.subheader("💡 Skill Expansion Tip")
+
+                role_index = np.where(
+                    roles == roles[top_idx[0]]
+                )[0][0]
+
+                weights = model.coef_[role_index]
+
+                top_features = np.argsort(weights)[::-1][:30]
+
+                skills = [
+                    feature_names[i]
+                    for i in top_features
+                    if len(feature_names[i]) > 2
+                ]
+
+                user_tokens = set(
+                    user_input.lower().replace(",", " ").split()
+                )
+
+                missing = [
+                    s for s in skills
+                    if s.lower() not in user_tokens
+                ]
+
+                if missing:
+
+                    st.markdown(f"""
+                    <div class="tip-box">
+                    Learn <b>{", ".join(missing[:3])}</b>
+                    to unlock more advanced opportunities.
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                else:
+
+                    st.success(
+                        "Your profile strongly aligns with this role."
+                    )
+
+            # ======================================================
+            # LIVE OPENINGS
+            # ======================================================
+            st.subheader("🌍 Live Career Opportunities")
+
+            for idx in top_idx:
+
                 conf = int(probs[idx] * 100)
-                st.markdown(f"""
-                <div class="role-card">
-                    <h4>{i}. {roles[idx]}</h4>
-                    <p><b>Match Strength:</b> {conf}%</p>
-                    <div class="progress" style="width:{conf}%;"></div>
-                </div>
-                """, unsafe_allow_html=True)
 
-        # RIGHT TIP
-        with right:
-            st.markdown("<div class='section-title'>💡 Skill Expansion Tip</div>", unsafe_allow_html=True)
+                # Skip weak predictions
+                if conf < 2:
+                    continue
 
-            role_index = np.where(roles == roles[top_idx[0]])[0][0]
-            weights = model.coef_[role_index]
-            top_features = np.argsort(weights)[::-1][:30]
+                role_name = roles[idx]
 
-            skills = [feature_names[i] for i in top_features if len(feature_names[i]) > 2]
-            user_tokens = set(user_input.lower().replace(",", " ").split())
-            missing = [s for s in skills if s.lower() not in user_tokens]
+                # --------------------------------------------------
+                # INTERNSHIP QUERY
+                # --------------------------------------------------
+                if job_type == "Internship":
 
-            tip = (
-                f"Learning <b>{', '.join(missing[:3])}</b> can significantly strengthen your profile."
-                if missing else
-                "Your skills already align strongly with this role 🚀"
-            )
+                    api_query = f"{role_name} Internship"
 
-            st.markdown(f"<div class='tip-box'>{tip}</div>", unsafe_allow_html=True)
+                else:
 
-        st.markdown("</div>", unsafe_allow_html=True)
+                    api_query = role_name
+
+                # --------------------------------------------------
+                # EXPANDER
+                # --------------------------------------------------
+                with st.expander(
+                    f"{role_name} ({conf}% Match)"
+                ):
+
+                    st.write(
+                        f"Showing {job_type} opportunities related to {role_name}"
+                    )
+
+                    jobs = fetch_jobs(api_query)
+
+                    # ----------------------------------------------
+                    # NO JOBS
+                    # ----------------------------------------------
+                    if len(jobs) == 0:
+
+                        st.warning(
+                            "No live openings found currently."
+                        )
+
+                    # ----------------------------------------------
+                    # JOBS
+                    # ----------------------------------------------
+                    else:
+
+                        for job in jobs[:5]:
+
+                            title = job.get(
+                                "title",
+                                "N/A"
+                            )
+
+                            company = job.get(
+                                "company", {}
+                            ).get(
+                                "display_name",
+                                "N/A"
+                            )
+
+                            location = job.get(
+                                "location", {}
+                            ).get(
+                                "display_name",
+                                "N/A"
+                            )
+
+                            salary_min = job.get(
+                                "salary_min",
+                                "Not Available"
+                            )
+
+                            salary_max = job.get(
+                                "salary_max",
+                                "Not Available"
+                            )
+
+                            apply_link = job.get(
+                                "redirect_url",
+                                None
+                            )
+
+                            st.markdown(f"""
+                            <div class="job-card">
+                                <h4>{title}</h4>
+                                <p><b>Company:</b> {company}</p>
+                                <p><b>Location:</b> {location}</p>
+                                <p><b>Salary:</b> {salary_min} - {salary_max}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                            if apply_link:
+
+                                st.link_button(
+                                    "🚀 Apply Now",
+                                    apply_link
+                                    
+                                )
 
 # ======================================================
 # FOOTER
 # ======================================================
 st.markdown("""
 <hr>
-<p style="text-align:center; color:#6B7280;">
-Built for <b>Luminex Hackathon</b> • Clean UI • Real ML
+<p style="text-align:center;color:gray;">
+Built with Machine Learning + Live Job Intelligence
 </p>
 """, unsafe_allow_html=True)
